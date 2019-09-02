@@ -3,14 +3,23 @@
 find_package(nlohmann_json REQUIRED)
 find_package(tinyxml2 REQUIRED)
 find_package(pugixml REQUIRED)
-find_package(Poco REQUIRED COMPONENTS JSON XML)
+find_package(RapidJSON REQUIRED)
 
-file(GLOB LIBRARIES_TEST_SOURCES *.cpp *.hpp *.h)
+file(GLOB LIBRARIES_TEST_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
 
-add_executable (LibrariesTest ${LIBRARIES_TEST_SOURCES})
+file(GLOB TINYXML_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/tinyxml/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/tinyxml/*.cpp)
+
+include_directories(${RapidJSON_INCLUDE_DIR})
+
+add_executable (LibrariesTest
+    ${LIBRARIES_TEST_SOURCES}
+    ${TINYXML_SOURCES})
 
 target_link_libraries(LibrariesTest 
     nlohmann_json::nlohmann_json
     pugixml
-    tinyxml2::tinyxml2
-    Poco::XML)
+    tinyxml2::tinyxml2)

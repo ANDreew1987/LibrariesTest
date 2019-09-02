@@ -9,25 +9,21 @@ using std::pair;
 using std::vector;
 using std::unique_ptr;
 
-class AlphabetChar;
-
 template<class T>
 struct BasicNode
 {
 public:
     using basic_data_type = basic_string<T, char_traits<T>, allocator<T>>;
-    using name_value_type = basic_data_type;
-    using attr_value_type = basic_data_type;
-    using attr = pair<attr_value_type, attr_value_type>;
+    using attr_type = pair<basic_data_type, basic_data_type>;
 
-    name_value_type name;
-    vector<attr> attributes;
+    basic_data_type name;
+    vector<attr_type> attributes;
     vector<unique_ptr<BasicNode<T>>> childNodes;
 
     BasicNode() = default;
 
     BasicNode(
-        const name_value_type &_name):
+        const basic_data_type &_name):
         name(_name) {}
 };
 

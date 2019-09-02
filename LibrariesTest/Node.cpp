@@ -15,7 +15,8 @@ using std::codecvt_utf8;
 class AlphabetUChar
 {
 public:
-    using value_type = typename string::value_type;
+    using alphabet_type = string;
+    using value_type = typename alphabet_type::value_type;
 
     AlphabetUChar()
     {
@@ -25,23 +26,24 @@ public:
         };
     }
 
-    string::size_type size() const
+    alphabet_type::size_type size() const
     {
         return m_Alphabet.size();
     }
 
-    const value_type at(const string::size_type index) const
+    const value_type at(const alphabet_type::size_type index) const
     {
         return m_Alphabet.at(index);
     }
 private:
-    string m_Alphabet;
+    alphabet_type m_Alphabet;
 };
 
 class AlphabetLChar
 {
 public:
-    using value_type = typename string::value_type;
+    using alphabet_type = string;
+    using value_type = typename alphabet_type::value_type;
 
     AlphabetLChar()
     {
@@ -51,17 +53,17 @@ public:
         };
     }
 
-    string::size_type size() const
+    alphabet_type::size_type size() const
     {
         return m_Alphabet.size();
     }
 
-    const value_type at(const string::size_type index) const
+    const value_type at(const alphabet_type::size_type index) const
     {
         return m_Alphabet.at(index);
     }
 private:
-    string m_Alphabet;
+    alphabet_type m_Alphabet;
 };
 
 class AlphabetEmojiChar

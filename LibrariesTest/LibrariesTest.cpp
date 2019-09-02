@@ -7,20 +7,16 @@
 
 #include <nlohmann/json.hpp>
 
+#include <rapidjson/document.h>
+#include <rapidjson/ostreamwrapper.h>
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/writer.h>
+
 #include <pugixml.hpp>
 
 #include <tinyxml2.h>
 
 #include "tinyxml.h"
-
-#include <Poco/DOM/Document.h>
-#include <Poco/DOM/Element.h>
-#include <Poco/DOM/AutoPtr.h>
-#include <Poco/DOM/DOMWriter.h>
-#include <Poco/XML/XMLWriter.h>
-#include <Poco/DOM/DOMParser.h>
-#include <Poco/SAX/InputSource.h>
-#include <Poco/XML/NamePool.h>
 
 #include "Node.hpp"
 
@@ -37,6 +33,15 @@ using std::setw;
 
 using nlohmann::json;
 
+using rapidjson::Document;
+using rapidjson::Value;
+using rapidjson::kObjectType;
+using rapidjson::kArrayType;
+using rapidjson::kStringType;
+using rapidjson::IStreamWrapper;
+using rapidjson::OStreamWrapper;
+using rapidjson::Writer;
+
 using pugi::xml_document;
 using pugi::xml_node;
 using pugi::xml_attribute;
@@ -45,34 +50,48 @@ using tinyxml2::XMLElement;
 using tinyxml2::XMLDocument;
 using tinyxml2::XMLNode;
 
-using Poco::XML::Document;
-using Poco::XML::Element;
-using Poco::XML::AutoPtr;
-using Poco::XML::DOMWriter;
-using Poco::XML::XMLWriter;
-using Poco::XML::DOMParser;
-using Poco::XML::InputSource;
-using Poco::XML::NamePool;
-
-json FormatNode(Node *n)
+void FormatNode(Node *n, json &j)
 {
-    json j_atrs;
+    json j_attributes;
     for (auto &a : n->attributes) {
-        j_atrs.emplace(a.first, a.second);
+        j_attributes.emplace(a.first, a.second);
+    }
+    if (!j_attributes.empty()){
+        j[n->name]["attributes"] = j_attributes;
     }
     json j_childs;
     for (auto &ch : n->childNodes) {
-        json j_ch = FormatNode(ch.get());
-        j_childs.push_back(j_ch);
-    }
-    json j_result;
-    if (!j_atrs.empty()){
-        j_result[n->name].push_back(j_atrs);
+        json j_child;
+        FormatNode(ch.get(), j_child);
+        j_childs.push_back(j_child);
     }
     if (!j_childs.empty()) {
-        j_result[n->name].push_back(j_childs);
+        j[n->name]["nodes"] = j_childs;
     }
-    return j_result;
+}
+
+void FormatNode(Node *n, Value &v, Document::AllocatorType &allocator)
+{
+    v.SetString(n->name.c_str(), allocator);
+    Value j_attrs(kObjectType);
+    for (auto &a : n->attributes) {
+        j_attrs.AddMember(
+            Value().SetString(a.first.c_str(), allocator),
+            Value().SetString(a.second.c_str(), allocator),
+            allocator);
+    }
+    if (!n->attributes.empty()) {
+        v.SetObject().AddMember("attributes", j_attrs, allocator);
+    }
+    Value j_nodes(kArrayType);
+    for (auto &ch : n->childNodes) {
+        Value j_node(kObjectType);
+        FormatNode(ch.get(), j_node, allocator);
+        j_nodes.PushBack(j_node, allocator);
+    }
+    if (!n->childNodes.empty()) {
+        v.SetObject().AddMember("nodes", j_nodes, allocator);
+    }
 }
 
 void FormatNode(Node *n, xml_node &x_node)
@@ -111,26 +130,27 @@ void FormatNode(Node *n, TiXmlElement *el)
     }
 }
 
-void FormatNode(Node *n, AutoPtr<Element> &el, AutoPtr<Document> &doc)
-{
-    for (auto &a : n->attributes) {
-        el->setAttribute(a.first, a.second);
-    }
-    for (auto &ch : n->childNodes) {
-        AutoPtr<Element> x_child = doc->createElement(ch->name);
-        FormatNode(ch.get(), x_child, doc);
-        el->appendChild(x_child);
-    }
-}
-
 void Save_NlohmannJSON(Node *n)
 {
-    json j = FormatNode(n);
+    json j;
+    FormatNode(n, j);
     ofstream o("gen_nlohmann.json");
     const unsigned char bom[] = { 0xEF, 0xBB, 0xBF };
     o.write(reinterpret_cast<const char*>(bom), sizeof(bom));
     //o << j;
     o << setw(4) << j;
+}
+
+void Save_RapidJSON(Node *n)
+{
+    Document doc;
+    Document::AllocatorType &allocator = doc.GetAllocator();
+    Value root(kObjectType);
+    FormatNode(n, root, allocator);
+    ofstream o("gen_rapid.json");
+    OStreamWrapper osw(o);
+    Writer<OStreamWrapper> writer(osw);
+    root.Accept(writer);
 }
 
 void Save_PugiXML(Node *n)
@@ -163,20 +183,6 @@ void Save_TinyXML(Node *n)
     d.SaveFile("gen_tiny.xml");
 }
 
-/*void Save_PocoXML(Node *n)
-{
-    NamePool *p = new NamePool(100000); // !!!!!??????????
-    AutoPtr<Document> doc = new Document(p);
-    AutoPtr<Element> root = doc->createElement(n->name.c_str());
-    FormatNode(n, root, doc);
-    doc->appendChild(root);
-    DOMWriter writer;
-    writer.setNewLine("\n");
-    writer.setOptions(XMLWriter::PRETTY_PRINT | XMLWriter::WRITE_XML_DECLARATION);
-    ofstream o("gen_PocoXML.xml");
-    writer.writeNode(o, doc);
-}*/
-
 int main()
 {
     {
@@ -184,10 +190,10 @@ int main()
         unique_ptr<Node> mainNode(GenMainNode());
         cout << "Data generated" << endl;
         Save_NlohmannJSON(mainNode.get());
+        Save_RapidJSON(mainNode.get());
         Save_PugiXML(mainNode.get());
         Save_TinyXML2(mainNode.get());
         Save_TinyXML(mainNode.get());
-        //Save_PocoXML(mainNode.get());
     }
 
     {
@@ -208,6 +214,27 @@ int main()
         high_resolution_clock::time_point t2 = high_resolution_clock::now();
         auto duration = duration_cast<microseconds>(t2 - t1).count();
         cout << "[MEMORY] nlohmann parsing time = " << duration << " us" << endl;
+    }
+    {
+        ifstream ifs("gen_rapid.json");
+        IStreamWrapper isw(ifs);
+        Document doc;
+        high_resolution_clock::time_point t1 = high_resolution_clock::now();
+        doc.ParseStream(isw);
+        high_resolution_clock::time_point t2 = high_resolution_clock::now();
+        auto duration = duration_cast<microseconds>(t2 - t1).count();
+        cout << "[FILE] RapidJSON parsing time = " << duration << " us" << endl;
+    }
+    {
+        ifstream ifs("gen_rapid.json");
+        std::string str((std::istreambuf_iterator<char>(ifs)),
+            std::istreambuf_iterator<char>());
+        Document doc;
+        high_resolution_clock::time_point t1 = high_resolution_clock::now();
+        doc.Parse(str.c_str());
+        high_resolution_clock::time_point t2 = high_resolution_clock::now();
+        auto duration = duration_cast<microseconds>(t2 - t1).count();
+        cout << "[MEMORY] RapidJSON parsing time = " << duration << " us" << endl;
     }
     {
         xml_document doc;
@@ -266,27 +293,6 @@ int main()
         auto duration = duration_cast<microseconds>(t2 - t1).count();
         cout << "[MEMORY] tinyxml parsing time = " << duration << " us" << endl;
     }
-    /*{
-        ifstream ifs("gen_PocoXML.xml");
-        InputSource src(ifs);
-        DOMParser parser;
-        high_resolution_clock::time_point t1 = high_resolution_clock::now();
-        AutoPtr<Document> doc = parser.parse(&src);
-        high_resolution_clock::time_point t2 = high_resolution_clock::now();
-        auto duration = duration_cast<microseconds>(t2 - t1).count();
-        cout << "PocoXML parsing time = " << duration << " us" << endl;
-    }*/
-    /*{
-        ifstream ifs("gen_PocoXML.xml");
-        std::string str((std::istreambuf_iterator<char>(ifs)),
-            std::istreambuf_iterator<char>());
-        DOMParser parser;
-        high_resolution_clock::time_point t1 = high_resolution_clock::now();
-        AutoPtr<Document> doc = parser.parseString(str);
-        high_resolution_clock::time_point t2 = high_resolution_clock::now();
-        auto duration = duration_cast<microseconds>(t2 - t1).count();
-        cout << "str PocoXML parsing time = " << duration << " us" << endl;
-    }*/
 
     cout << "Press any key to exit ..." << endl;
     cin.get();
